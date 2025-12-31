@@ -192,12 +192,11 @@ def tab_imagenes():
         
         # Etiquetas de paisaje
         st.markdown("#### Etiquetas en la Imagen (Opcional)")
-        with st.expander("Añadir etiquetas a la imagen"):
-            landmarks_text = st.text_area(
-                "Nombres de picos y lugares (uno por línea)",
-                value="Pico Ocejón\nCastillo de Atienza",
-                help="Escribe los nombres que quieres que aparezcan sobre la imagen"
-            )
+        landmarks_text = st.text_area(
+            "Nombres de picos y lugares (uno por línea)",
+            value="Pico Ocejón\nCastillo de Atienza",
+            help="Escribe los nombres que quieres que aparezcan sobre la imagen"
+        )
     
     with col2:
         st.subheader("Página 2: Mapas Técnicos")
@@ -224,7 +223,7 @@ def tab_imagenes():
         'panoramic': panoramic,
         'map': map_image,
         'profile': profile_image,
-        'landmarks': landmarks_text if 'landmarks_text' in dir() else ""
+        'landmarks': landmarks_text
     }
 
 
@@ -510,7 +509,7 @@ def generate_pdf(data):
     """Genera el PDF y lo guarda en un archivo temporal"""
     # Crear directorio temporal
     temp_dir = tempfile.mkdtemp()
-    output_path = os.path.join(temp_dir, f"topoguia_{data['route_code'].replace(' ', '_')}.pdf")
+    output_path = os.path.join(temp_dir, f"topoguia_{data['basic']['route_code'].replace(' ', '_')}.pdf")
     
     # Procesar imágenes
     processed_images = {}
@@ -528,9 +527,18 @@ def generate_pdf(data):
     # Procesar logos
     logo_paths = {}
     if data['additional'].get('logo_left'):
-        logo_paths['logo_left'] = data['additional']['logo_left']
+        logo_ext = data['additional']['logo_left'].name.split('.')[-1]
+        logo_path = os.path.join(temp_dir, f"logo_left.{logo_ext}")
+        with open(logo_path, 'wb') as f:
+            f.write(data['additional']['logo_left'].getvalue())
+        logo_paths['logo_left'] = logo_path
+    
     if data['additional'].get('logo_right'):
-        logo_paths['logo_right'] = data['additional']['logo_right']
+        logo_ext = data['additional']['logo_right'].name.split('.')[-1]
+        logo_path = os.path.join(temp_dir, f"logo_right.{logo_ext}")
+        with open(logo_path, 'wb') as f:
+            f.write(data['additional']['logo_right'].getvalue())
+        logo_paths['logo_right'] = logo_path
     
     # Preparar datos completos para el PDF
     pdf_data = {
@@ -564,7 +572,12 @@ def generate_pdf(data):
     }
     
     # Generar PDF
-    create_topoguide_pdf(output_path, pdf_data)
+    create_topoguide_pdf(
+        output_path, 
+        pdf_data,
+        logo_left=logo_paths.get('logo_left'),
+        logo_right=logo_paths.get('logo_right')
+    )
     
     return output_path
 
