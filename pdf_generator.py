@@ -299,9 +299,9 @@ class TopoGuidePDFGenerator:
         self._draw_recommendations(data.get('recommendations', []))
         
         # Pie de página página 1
-        self._draw_footer(page_num=1)
+        self._draw_footer(page_num=1, date_str=page1_data.get('date'))
     
-    def _draw_footer(self, page_num=1):
+    def _draw_footer(self, page_num=1, date_str=None):
         """Dibuja el pie de página"""
         self.c.setStrokeColor(self.GREEN_PRIMARY)
         self.c.setLineWidth(1)
@@ -314,7 +314,9 @@ class TopoGuidePDFGenerator:
         self.c.setFont("Helvetica-Bold", 7)
         self.c.drawCentredString(self.LANDSCAPE_WIDTH / 2, 5 * mm, "Castilla-La Mancha")
         
-        self.c.drawRightString(self.LANDSCAPE_WIDTH - 10 * mm, 5 * mm, data.get('date', datetime.now().strftime('%Y-%m-%d')))
+        if date_str is None:
+            date_str = datetime.now().strftime('%Y-%m-%d')
+        self.c.drawRightString(self.LANDSCAPE_WIDTH - 10 * mm, 5 * mm, date_str)
     
     def _draw_map(self, map_path, waypoints=None):
         """Dibuja el mapa topográfico con traza"""
@@ -590,7 +592,7 @@ class TopoGuidePDFGenerator:
         self._draw_mide_panel(data.get('mide', {}), data.get('technical', {}))
         
         # Pie de página
-        self._draw_footer(page_num=2)
+        self._draw_footer(page_num=2, date_str=data.get('date'))
     
     def _wrap_text(self, text, max_width, font_size, font_name):
         """Envuelve texto para que quepa en el ancho especificado"""
