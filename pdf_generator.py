@@ -79,7 +79,7 @@ class TopoGuidePDFGenerator:
         
         # Texto de párrafo justificado
         self.styles.add(ParagraphStyle(
-            name='BodyText',
+            name='BodyTextCustom',
             parent=self.styles['Normal'],
             fontSize=9,
             fontName='Helvetica',
