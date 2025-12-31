@@ -1,0 +1,24 @@
+# TopoGuide Pro Generator - Dependencias
+# Generador profesional de topoguías de senderismo en PDF
+
+# Framework principal de la aplicación web
+streamlit>=1.28.0
+
+# Generación de documentos PDF profesionales
+reportlab>=4.0.0
+
+# Generación de códigos QR
+qrcode>=7.4.0
+Pillow>=10.0.0
+
+# Manejo de datos (para futuras extensiones)
+pandas>=2.0.0
+
+# Dependencias opcionales pero recomendadas
+# numpy>=1.24.0  # Para procesamiento numérico avanzado
+# matplotlib>=3.7.0  # Para generación de gráficos de elevación
+
+# Notas de instalación:
+# 1. Instalar dependencias: pip install -r requirements.txt
+# 2. Ejecutar aplicación: streamlit run app.py
+# 3. Abrir navegador en: http://localhost:8501
