@@ -34,8 +34,7 @@ class TopoGuidePDFGenerator:
     
     def __init__(self, output_path):
         self.output_path = output_path
-        self.c = canvas.Canvas(output_path, pagesize=A4)
-        self.c.setPageSize(A4)  # Usamos A4 normal pero rotaremos contenido
+        self.c = canvas.Canvas(output_path, pagesize=(self.LANDSCAPE_WIDTH, self.LANDSCAPE_HEIGHT))
         
         # Estilos de texto
         self.styles = getSampleStyleSheet()
@@ -128,12 +127,12 @@ class TopoGuidePDFGenerator:
                 self.c.drawImage(
                     self._pil_to_reportlab(img_bytes),
                     10 * mm, self.LANDSCAPE_HEIGHT - 18 * mm,
-                    width=img.width / 2.83,  # Conversión a puntos
+                    width=img.width / 2.83,
                     height=img.height / 2.83,
                     mask='auto'
                 )
-            except:
-                pass
+            except Exception as e:
+                print(f"Error cargando logo izquierdo: {e}")
         
         # Logo derecho (si existe)
         if logo_right:
@@ -150,102 +149,96 @@ class TopoGuidePDFGenerator:
                     height=img.height / 2.83,
                     mask='auto'
                 )
-            except:
-                pass
+            except Exception as e:
+                print(f"Error cargando logo derecho: {e}")
         
-        # Título de ruta (PR-GU XX) - muy grande en verde oscuro
-        self.c.setFillColor(self.GREEN_PRIMARY)
+        # Título de ruta (PR-GU XX)
+        self.c.setFillColor(self.TEXT_LIGHT)
         self.c.setFont("Helvetica-Bold", 28)
-        self.c.drawCentredString(self.LANDSCAPE_WIDTH / 2, self.LANDSCAPE_HEIGHT - 14 * mm, route_code)
+        self.c.drawCentredString(self.LANDSCAPE_WIDTH / 2, self.LANDSCAPE_HEIGHT - 12 * mm, route_code)
         
         # Subtítulo
-        self.c.setFillColor(self.TEXT_DARK)
-        self.c.setFont("Helvetica", 12)
-        self.c.drawCentredString(self.LANDSCAPE_WIDTH / 2, self.LANDSCAPE_HEIGHT - 19 * mm, route_name)
+        self.c.setFillColor(self.TEXT_LIGHT)
+        self.c.setFont("Helvetica", 11)
+        self.c.drawCentredString(self.LANDSCAPE_WIDTH / 2, self.LANDSCAPE_HEIGHT - 18 * mm, route_name)
     
     def _draw_panoramic(self, panoramic_path, landmarks=None):
         """Dibuja la imagen panorámica con etiquetas"""
-        img_y_start = self.LANDSCAPE_HEIGHT - 20 * mm - 55 * mm  # Debajo de cabecera
+        img_y_start = self.LANDSCAPE_HEIGHT - 20 * mm - 55 * mm
         img_height = 55 * mm
         
         if panoramic_path:
             try:
                 img = Image.open(panoramic_path)
-                # Mantener aspecto ratio
-                img.thumbnail((self.LANDSCAPE_WIDTH - 20 * mm, img_height))
-                img_bytes = io.BytesIO()
-                img.save(img_bytes, format='PNG')
-                img_bytes.seek(0)
+                aspect_ratio = img.width / img.height
+                img_width = min(self.LANDSCAPE_WIDTH - 20 * mm, img_height * aspect_ratio)
+                img_display_height = img_width / aspect_ratio
                 
-                # Centrar imagen
-                img_width = img.width / 2.83
                 x_pos = (self.LANDSCAPE_WIDTH - img_width) / 2
                 
                 self.c.drawImage(
-                    self._pil_to_reportlab(img_bytes),
-                    x_pos, self.LANDSCAPE_HEIGHT - 20 * mm - img_height - 2 * mm,
+                    panoramic_path,
+                    x_pos, self.LANDSCAPE_HEIGHT - 20 * mm - img_display_height - 2 * mm,
                     width=img_width,
-                    height=img_height / 2.83,
+                    height=img_display_height,
                     mask='auto'
                 )
             except Exception as e:
                 print(f"Error cargando imagen panorámica: {e}")
         
-        # Etiqueta "MIRADOR" vertical en el lateral izquierdo
+        # Etiqueta "MIRADOR" vertical
         self.c.setFillColor(self.GREEN_PRIMARY)
         self.c.setFont("Helvetica-Bold", 10)
         
-        # Guardar estado y rotar
         self.c.saveState()
         self.c.translate(8 * mm, self.LANDSCAPE_HEIGHT - 20 * mm - img_height / 2)
         self.c.rotate(90)
-        self.c.drawCentredString(0, 0, "MIRADOR DEL PICO")
+        self.c.drawCentredString(0, 0, "MIRADOR")
         self.c.restoreState()
         
-        # Etiquetas de paisajes si se proporcionan
+        # Etiquetas de paisajes
         if landmarks:
-            self.c.setFillColor(self.TEXT_LIGHT)
-            self.c.setFont("Helvetica-Bold", 8)
             for landmark in landmarks:
-                x = landmark.get('x', 0)
-                y = landmark.get('y', 0)
-                text = landmark.get('text', '')
-                # Fondo semitransparente para texto
-                self.c.setFillColorRGB(0, 0, 0, 0.5)
-                self.c.roundRect(
-                    (x - 20) * mm, 
-                    (self.LANDSCAPE_HEIGHT - 20 * mm - img_height + y) * mm,
-                    len(text) * 3 * mm + 5 * mm, 8 * mm, 2, fill=1, stroke=0
-                )
-                self.c.setFillColor(self.TEXT_LIGHT)
-                self.c.drawCentredString(x * mm, (self.LANDSCAPE_HEIGHT - 20 * mm - img_height + y + 2) * mm, text)
+                try:
+                    x = landmark.get('x', 0) * mm
+                    y = (self.LANDSCAPE_HEIGHT - 20 * mm - img_height + landmark.get('y', 0)) * mm
+                    text = landmark.get('text', '')
+                    
+                    # Fondo semitransparente
+                    text_width = len(text) * 3 * mm
+                    self.c.setFillColorRGB(0, 0, 0, 0.5)
+                    self.c.roundRect(
+                        x - text_width/2, y,
+                        text_width, 8 * mm, 2, fill=1, stroke=0
+                    )
+                    self.c.setFillColor(self.TEXT_LIGHT)
+                    self.c.drawCentredString(x, y + 2 * mm, text)
+                except Exception as e:
+                    print(f"Error dibujando landmark: {e}")
     
     def _draw_descriptions(self, paragraphs):
         """Dibuja los párrafos descriptivos"""
-        text_y_start = 20 * mm  # Margen inferior
-        col_width = (self.LANDSCAPE_WIDTH - 30 * mm) * 0.65  # 65% del ancho
+        col_width = (self.LANDSCAPE_WIDTH - 30 * mm) * 0.60
         
         self.c.setFillColor(self.TEXT_DARK)
         self.c.setFont("Helvetica", 9)
         
-        y_position = self.LANDSCAPE_HEIGHT - 20 * mm - 55 * mm - 10 * mm
+        y_position = self.LANDSCAPE_HEIGHT - 80 * mm
         
-        for i, paragraph in enumerate(paragraphs):
-            if i < 4:  # Máximo 4 párrafos
-                # Mostrar solo primeras líneas de cada párrafo
-                lines = self._wrap_text(paragraph, col_width, 9, "Helvetica")
-                for line in lines[:3]:  # Máx 3 líneas por párrafo
+        for i, paragraph in enumerate(paragraphs[:4]):
+            lines = self._wrap_text(paragraph, col_width, 9, "Helvetica")
+            for line in lines[:3]:
+                if y_position > 20 * mm:
                     self.c.drawString(15 * mm, y_position, line)
-                    y_position -= 11 * mm
-                y_position -= 5 * mm  # Espacio entre párrafos
+                    y_position -= 4 * mm
+            y_position -= 3 * mm
     
     def _draw_recommendations(self, recommendations):
         """Dibuja el bloque de recomendaciones"""
-        # Posición: columna derecha
-        box_x = self.LANDSCAPE_WIDTH - (self.LANDSCAPE_WIDTH - 30 * mm) * 0.65 + 5 * mm
-        box_width = (self.LANDSCAPE_WIDTH - 30 * mm) * 0.30
+        box_x = self.LANDSCAPE_WIDTH - 75 * mm
+        box_width = 65 * mm
         box_height = 100 * mm
-        box_y = self.LANDSCAPE_HEIGHT - 20 * mm - 55 * mm - 10 * mm
+        box_y = self.LANDSCAPE_HEIGHT - 30 * mm
         
         # Fondo gris claro
         self.c.setFillColor(self.GRAY_LIGHT)
@@ -261,20 +254,22 @@ class TopoGuidePDFGenerator:
         self.c.setFont("Helvetica-Bold", 11)
         self.c.drawString(box_x + 5 * mm, box_y - 8 * mm, "RECOMENDACIONES")
         
-        # Lista de recomendaciones
+        # Lista
         self.c.setFillColor(self.TEXT_DARK)
-        self.c.setFont("Helvetica", 8)
+        self.c.setFont("Helvetica", 7)
         
         y_recomm = box_y - 15 * mm
-        for rec in recommendations[:5]:  # Máx 5 recomendaciones
+        for rec in recommendations[:6]:
             # Viñeta
             self.c.setFillColor(self.OCHRE)
-            self.c.circle(box_x + 7 * mm, y_recomm - 2 * mm, 2 * mm, fill=1, stroke=0)
+            self.c.circle(box_x + 4 * mm, y_recomm, 1 * mm, fill=1, stroke=0)
             
             self.c.setFillColor(self.TEXT_DARK)
-            self.c.setFont("Helvetica", 7)
-            self.c.drawString(box_x + 12 * mm, y_recomm - 5 * mm, rec[:60] + ("..." if len(rec) > 60 else ""))
-            y_recomm -= 12 * mm
+            lines = self._wrap_text(rec, box_width - 15 * mm, 7, "Helvetica")
+            for line in lines[:2]:
+                self.c.drawString(box_x + 8 * mm, y_recomm - 2 * mm, line)
+                y_recomm -= 3.5 * mm
+            y_recomm -= 2 * mm
     
     def _draw_page1(self, data, logo_left=None, logo_right=None):
         """Genera la página 1 completa"""
@@ -298,8 +293,8 @@ class TopoGuidePDFGenerator:
         # Recomendaciones
         self._draw_recommendations(data.get('recommendations', []))
         
-        # Pie de página página 1
-        self._draw_footer(page_num=1, date_str=page1_data.get('date'))
+        # Pie de página
+        self._draw_footer(page_num=1, date_str=data.get('date'))
     
     def _draw_footer(self, page_num=1, date_str=None):
         """Dibuja el pie de página"""
@@ -319,176 +314,131 @@ class TopoGuidePDFGenerator:
         self.c.drawRightString(self.LANDSCAPE_WIDTH - 10 * mm, 5 * mm, date_str)
     
     def _draw_map(self, map_path, waypoints=None):
-        """Dibuja el mapa topográfico con traza"""
-        map_width = self.LANDSCAPE_WIDTH - 30 * mm
-        map_height = 80 * mm
-        map_x = 10 * mm
-        map_y = self.LANDSCAPE_HEIGHT - 25 * mm - map_height
+        """Dibuja el mapa topográfico"""
+        map_width = (self.LANDSCAPE_WIDTH - 30 * mm) * 0.55
+        map_height = 85 * mm
+        map_x = 15 * mm
+        map_y = self.LANDSCAPE_HEIGHT - 30 * mm - map_height
         
         if map_path:
             try:
-                img = Image.open(map_path)
-                img.thumbnail((map_width, map_height))
-                img_bytes = io.BytesIO()
-                img.save(img_bytes, format='PNG')
-                img_bytes.seek(0)
-                
                 self.c.drawImage(
-                    self._pil_to_reportlab(img_bytes),
+                    map_path,
                     map_x, map_y,
-                    width=img.width / 2.83,
-                    height=img.height / 2.83,
+                    width=map_width,
+                    height=map_height,
+                    preserveAspectRatio=True,
                     mask='auto'
                 )
             except Exception as e:
                 print(f"Error cargando mapa: {e}")
         
-        # Borde verde alrededor del mapa
+        # Borde
         self.c.setStrokeColor(self.GREEN_PRIMARY)
         self.c.setLineWidth(2)
         self.c.rect(map_x, map_y, map_width, map_height, fill=0, stroke=1)
-        
-        # Waypoints y marcadores
-        if waypoints:
-            self.c.setFont("Helvetica-Bold", 8)
-            for wp in waypoints:
-                x = wp.get('x', 0) * map_width / 100 + map_x
-                y = wp.get('y', 0) * map_height / 100 + map_y
-                label = wp.get('label', '')
-                
-                if wp.get('type') == 'start':
-                    self.c.setFillColor(colors.Green)
-                    self.c.circle(x, y, 4 * mm, fill=1, stroke=1)
-                    self.c.setFillColor(colors.White)
-                    self.c.drawCentredString(x, y + 5 * mm, "INICIO")
-                elif wp.get('type') == 'end':
-                    self.c.setFillColor(colors.Red)
-                    self.c.circle(x, y, 4 * mm, fill=1, stroke=1)
-                    self.c.setFillColor(colors.White)
-                    self.c.drawCentredString(x, y + 5 * mm, "FINAL")
-                elif wp.get('type') == 'viewpoint':
-                    self.c.setFillColor(self.OCHRE)
-                    self.c.circle(x, y, 3 * mm, fill=1, stroke=1)
     
-    def _draw_elevation_profile(self, profile_path, data):
+    def _draw_elevation_profile(self, profile_path):
         """Dibuja el perfil de elevación"""
         profile_width = (self.LANDSCAPE_WIDTH - 30 * mm) * 0.55
-        profile_height = 50 * mm
-        profile_x = 10 * mm
-        profile_y = 15 * mm + 55 * mm
+        profile_height = 45 * mm
+        profile_x = 15 * mm
+        profile_y = 20 * mm
         
         if profile_path:
             try:
-                img = Image.open(profile_path)
-                img.thumbnail((profile_width, profile_height))
-                img_bytes = io.BytesIO()
-                img.save(img_bytes, format='PNG')
-                img_bytes.seek(0)
-                
                 self.c.drawImage(
-                    self._pil_to_reportlab(img_bytes),
+                    profile_path,
                     profile_x, profile_y,
-                    width=img.width / 2.83,
-                    height=img.height / 2.83,
+                    width=profile_width,
+                    height=profile_height,
+                    preserveAspectRatio=True,
                     mask='auto'
                 )
             except Exception as e:
                 print(f"Error cargando perfil: {e}")
         
-        # Etiquetas del perfil
-        self.c.setFillColor(self.GREEN_PRIMARY)
-        self.c.setFont("Helvetica-Bold", 7)
-        
-        # Labels
-        labels = [
-            (profile_x + 5 * mm, profile_y + profile_height + 2 * mm, "INICIO"),
-            (profile_x + profile_width * 0.3, profile_y + profile_height + 2 * mm, "MIRABUENO"),
-            (profile_x + profile_width * 0.6, profile_y + profile_height + 2 * mm, "ARAGOSA"),
-            (profile_x + profile_width - 20 * mm, profile_y + profile_height + 2 * mm, "FINAL")
-        ]
-        
-        for x, y, text in labels:
-            self.c.drawCentredString(x, y, text)
-    
-    def _draw_mide_panel(self, mide_data, technical_data):
-        """Dibuja el panel de información MIDE"""
-        panel_x = self.LANDSCAPE_WIDTH - (self.LANDSCAPE_WIDTH - 30 * mm) * 0.40 - 5 * mm
-        panel_width = (self.LANDSCAPE_WIDTH - 30 * mm) * 0.40
-        panel_y = 15 * mm
-        panel_height = 130 * mm
-        
-        # Fondo panel
-        self.c.setFillColor(self.GRAY_LIGHT)
-        self.c.rect(panel_x, panel_y, panel_width, panel_height, fill=1, stroke=0)
-        
-        # Borde verde
+        # Borde
         self.c.setStrokeColor(self.GREEN_PRIMARY)
         self.c.setLineWidth(2)
-        self.c.rect(panel_x, panel_y, panel_width, panel_height, fill=0, stroke=1)
+        self.c.rect(profile_x, profile_y, profile_width, profile_height, fill=0, stroke=1)
+    
+    def _draw_mide_panel(self, mide_data, technical_data):
+        """Dibuja el panel MIDE e información técnica"""
+        panel_x = self.LANDSCAPE_WIDTH - 110 * mm
+        panel_width = 95 * mm
+        panel_y = self.LANDSCAPE_HEIGHT - 30 * mm
+        panel_height = self.LANDSCAPE_HEIGHT - 40 * mm
         
-        # Tabla de datos técnicos
-        self._draw_technical_table(panel_x + 5 * mm, panel_y + panel_height - 25 * mm, technical_data, panel_width - 10 * mm)
+        # Fondo
+        self.c.setFillColor(self.GRAY_LIGHT)
+        self.c.rect(panel_x, 15 * mm, panel_width, panel_height, fill=1, stroke=0)
         
-        # Matriz MIDE
-        self._draw_mide_grid(panel_x + 5 * mm, panel_y + panel_height - 75 * mm, mide_data, panel_width - 10 * mm)
+        # Borde
+        self.c.setStrokeColor(self.GREEN_PRIMARY)
+        self.c.setLineWidth(2)
+        self.c.rect(panel_x, 15 * mm, panel_width, panel_height, fill=0, stroke=1)
         
-        # Panel inferior: señalización, consejos, teléfonos
-        self._draw_info_bottom(panel_x + 5 * mm, panel_y + 5 * mm, technical_data)
+        # Contenido
+        y_pos = panel_y - 10 * mm
+        
+        # Tabla técnica
+        self._draw_technical_table(panel_x + 5 * mm, y_pos, technical_data, panel_width - 10 * mm)
+        
+        # MIDE grid
+        self._draw_mide_grid(panel_x + 5 * mm, y_pos - 50 * mm, mide_data, panel_width - 10 * mm)
+        
+        # Info adicional
+        self._draw_info_bottom(panel_x + 5 * mm, 20 * mm, technical_data)
     
     def _draw_technical_table(self, x, y, data, width):
-        """Dibuja la tabla de datos técnicos"""
-        # Fondo verde para cabecera
+        """Tabla de datos técnicos"""
+        # Cabecera
         self.c.setFillColor(self.GREEN_PRIMARY)
-        self.c.rect(x, y - 12 * mm, width, 8 * mm, fill=1, stroke=0)
+        self.c.rect(x, y, width, 8 * mm, fill=1, stroke=0)
         
         self.c.setFillColor(self.TEXT_LIGHT)
         self.c.setFont("Helvetica-Bold", 9)
-        self.c.drawCentredString(x + width / 2, y - 8 * mm, "FICHA TÉCNICA")
+        self.c.drawCentredString(x + width / 2, y + 2 * mm, "FICHA TÉCNICA")
         
         # Datos
-        row_height = 7 * mm
-        y_row = y - 12 * mm - row_height
+        row_height = 6 * mm
+        y_row = y - row_height
         
         data_rows = [
             ("Horario:", data.get('time', '2h 30m')),
             ("Distancia:", data.get('distance', '11,0 km')),
-            ("Desnivel Subida:", data.get('elevation_up', '167 m')),
-            ("Desnivel Bajada:", data.get('elevation_down', '167 m')),
-            ("Tipo de Ruta:", data.get('route_type', 'Circular'))
+            ("Subida:", data.get('elevation_up', '167 m')),
+            ("Bajada:", data.get('elevation_down', '167 m')),
+            ("Tipo:", data.get('route_type', 'Circular'))
         ]
         
-        self.c.setFont("Helvetica-Bold", 8)
+        self.c.setFont("Helvetica", 7)
         for label, value in data_rows:
-            # Fondo alternado
-            if data_rows.index((label, value)) % 2 == 0:
-                self.c.setFillColor(self.GREEN_LIGHT)
-                self.c.rect(x, y_row - 2 * mm, width / 2, row_height, fill=1, stroke=0)
-                self.c.rect(x + width / 2, y_row - 2 * mm, width / 2, row_height, fill=1, stroke=0)
-            
             self.c.setFillColor(self.TEXT_DARK)
-            self.c.drawString(x + 3 * mm, y_row, label)
-            self.c.setFont("Helvetica", 8)
-            self.c.drawString(x + width / 2 + 3 * mm, y_row, value)
-            self.c.setFont("Helvetica-Bold", 8)
+            self.c.drawString(x + 2 * mm, y_row + 1 * mm, label)
+            self.c.setFont("Helvetica-Bold", 7)
+            self.c.drawString(x + width / 2, y_row + 1 * mm, value)
+            self.c.setFont("Helvetica", 7)
             y_row -= row_height
     
     def _draw_mide_grid(self, x, y, mide_data, width):
-        """Dibuja la cuadrícula MIDE 2x2"""
+        """Cuadrícula MIDE"""
         cell_width = width / 2
-        cell_height = 25 * mm
+        cell_height = 22 * mm
         
         mide_items = [
-            ('SEVERIDAD DEL MEDIO', mide_data.get('severity', 1), 'Medio'),
-            ('ORIENTACIÓN', mide_data.get('orientation', 2), 'Itinerario'),
-            ('DIFICULTAD', mide_data.get('difficulty', 2), 'Desplazamiento'),
-            ('ESFUERZO', mide_data.get('effort', 2), 'Esfuerzo')
+            ('SEVERIDAD', mide_data.get('severity', 1)),
+            ('ORIENTACIÓN', mide_data.get('orientation', 2)),
+            ('DIFICULTAD', mide_data.get('difficulty', 2)),
+            ('ESFUERZO', mide_data.get('effort', 2))
         ]
         
-        for i, (title, value, subtitle) in enumerate(mide_items):
+        for i, (title, value) in enumerate(mide_items):
             cell_x = x + (i % 2) * cell_width
             cell_y = y - (i // 2) * cell_height
             
-            # Color según valor
+            # Color
             if value <= 2:
                 color = self.GREEN_PRIMARY
             elif value == 3:
@@ -496,116 +446,92 @@ class TopoGuidePDFGenerator:
             else:
                 color = colors.HexColor("#E74C3C")
             
-            # Borde de celda
+            # Celda
             self.c.setStrokeColor(color)
-            self.c.setLineWidth(3)
+            self.c.setLineWidth(2)
             self.c.rect(cell_x, cell_y, cell_width, cell_height, fill=0, stroke=1)
             
-            # Valor grande
+            # Valor
             self.c.setFillColor(color)
-            self.c.setFont("Helvetica-Bold", 20)
-            self.c.drawCentredString(cell_x + cell_width / 2, cell_y + cell_height / 2 - 3 * mm, str(value))
+            self.c.setFont("Helvetica-Bold", 18)
+            self.c.drawCentredString(cell_x + cell_width / 2, cell_y + cell_height / 2 - 2 * mm, str(value))
             
-            # Título y subtítulo
+            # Título
             self.c.setFillColor(self.TEXT_DARK)
-            self.c.setFont("Helvetica-Bold", 7)
-            self.c.drawCentredString(cell_x + cell_width / 2, cell_y + cell_height - 8 * mm, title)
-            self.c.setFont("Helvetica", 6)
-            self.c.drawCentredString(cell_x + cell_width / 2, cell_y + cell_height - 14 * mm, subtitle)
+            self.c.setFont("Helvetica-Bold", 6)
+            self.c.drawCentredString(cell_x + cell_width / 2, cell_y + cell_height - 5 * mm, title)
     
     def _draw_info_bottom(self, x, y, data):
-        """Dibuja la información inferior del panel"""
-        # Señalización
+        """Información adicional"""
+        # Teléfonos
         self.c.setFillColor(self.GREEN_PRIMARY)
         self.c.setFont("Helvetica-Bold", 8)
-        self.c.drawString(x, y + 45 * mm, "SEÑALIZACIÓN")
+        self.c.drawString(x, y + 35 * mm, "CONTACTO")
         
-        # Marcas de senderismo (rectángulos simulados)
-        self.c.setFillColor(colors.White)
-        self.c.rect(x + 5 * mm, y + 48 * mm, 30 * mm, 4 * mm, fill=1, stroke=1)
-        self.c.rect(x + 38 * mm, y + 48 * mm, 30 * mm, 4 * mm, fill=1, stroke=1)
-        self.c.rect(x + 71 * mm, y + 48 * mm, 20 * mm, 4 * mm, fill=1, stroke=1)
-        
-        # Consejos
-        self.c.setFillColor(self.GREEN_PRIMARY)
+        self.c.setFillColor(colors.red)
         self.c.setFont("Helvetica-Bold", 8)
-        self.c.drawString(x, y + 30 * mm, "DISFRUTA DEL PARQUE")
-        
-        self.c.setFillColor(self.TEXT_DARK)
-        self.c.setFont("Helvetica", 6)
-        consejos = ["· Usa prismáticos", "· Respira el silencio", "· No enciendas fuego", "· Llévate la basura"]
-        for i, consejo in enumerate(consejos):
-            self.c.drawString(x, y + 25 * mm - i * 4 * mm, consejo)
-        
-        # Teléfonos y web
-        self.c.setFillColor(self.GREEN_PRIMARY)
-        self.c.setFont("Helvetica-Bold", 8)
-        self.c.drawString(x, y + 12 * mm, "TELÉFONOS DE INTERÉS")
-        
-        self.c.setFillColor(colors.HexColor("#E74C3C"))
-        self.c.setFont("Helvetica-Bold", 9)
-        self.c.drawString(x, y + 7 * mm, f"Emergencias: {data.get('emergency', '112')}")
+        self.c.drawString(x, y + 30 * mm, f"Emergencias: {data.get('emergency', '112')}")
         
         self.c.setFillColor(self.TEXT_DARK)
         self.c.setFont("Helvetica", 7)
-        self.c.drawString(x, y + 2 * mm, f"Parque: {data.get('phone', '949 88 53 00')}")
-        self.c.drawString(x, y - 2 * mm, data.get('web', 'http://areasprotegidas.castillalamancha.es'))
+        self.c.drawString(x, y + 25 * mm, f"Parque: {data.get('phone', '949 88 53 00')}")
+        self.c.drawString(x, y + 20 * mm, data.get('web', 'info@parque.es')[:40])
         
-        # QR Code
-        qr = qrcode.QRCode(box_size=10, border=0)
-        qr.add_data(data.get('web', 'http://example.com'))
-        qr.make(fit=True)
-        qr_img = qr.make_image(fill_color=self.GREEN_PRIMARY, back_color="white")
-        
-        qr_bytes = io.BytesIO()
-        qr_img.save(qr_bytes, format='PNG')
-        qr_bytes.seek(0)
-        
-        # Posicionar QR en esquina
-        self.c.drawImage(
-            self._pil_to_reportlab(qr_bytes),
-            x + (x + 20 * mm),  # Ajustar posición
-            y,
-            width=20 * mm,
-            height=20 * mm,
-            mask='auto'
-        )
+        # QR
+        try:
+            qr = qrcode.QRCode(box_size=3, border=1)
+            qr.add_data(data.get('web', 'http://example.com'))
+            qr.make(fit=True)
+            qr_img = qr.make_image(fill_color=self.GREEN_PRIMARY, back_color="white")
+            
+            qr_bytes = io.BytesIO()
+            qr_img.save(qr_bytes, format='PNG')
+            qr_bytes.seek(0)
+            
+            self.c.drawImage(
+                self._pil_to_reportlab(qr_bytes),
+                x + 50 * mm, y + 15 * mm,
+                width=25 * mm,
+                height=25 * mm,
+                mask='auto'
+            )
+        except Exception as e:
+            print(f"Error generando QR: {e}")
     
     def _draw_page2(self, data):
-        """Genera la página 2 completa"""
-        # Sin cabecera verde completa en página 2, solo barra superior
+        """Página 2"""
+        # Cabecera simple
         self.c.setFillColor(self.GREEN_PRIMARY)
         self.c.rect(0, self.LANDSCAPE_HEIGHT - 15 * mm, self.LANDSCAPE_WIDTH, 15 * mm, fill=1, stroke=0)
         
-        # Título en cabecera página 2
         self.c.setFillColor(self.TEXT_LIGHT)
         self.c.setFont("Helvetica-Bold", 14)
-        self.c.drawCentredString(self.LANDSCAPE_WIDTH / 2, self.LANDSCAPE_HEIGHT - 10 * mm, "INFORMACIÓN TÉCNICA")
+        self.c.drawCentredString(self.LANDSCAPE_WIDTH / 2, self.LANDSCAPE_HEIGHT - 10 * mm, "MAPA Y PERFIL")
         
-        # Mapa grande
+        # Mapa
         self._draw_map(data.get('map_image'), data.get('waypoints', []))
         
-        # Perfil de elevación
-        self._draw_elevation_profile(data.get('profile_image'), data)
+        # Perfil
+        self._draw_elevation_profile(data.get('profile_image'))
         
-        # Panel MIDE y datos técnicos
+        # Panel MIDE
         self._draw_mide_panel(data.get('mide', {}), data.get('technical', {}))
         
-        # Pie de página
+        # Footer
         self._draw_footer(page_num=2, date_str=data.get('date'))
     
     def _wrap_text(self, text, max_width, font_size, font_name):
-        """Envuelve texto para que quepa en el ancho especificado"""
-        lines = []
+        """Ajusta texto al ancho"""
         words = text.split(' ')
+        lines = []
         current_line = ""
         
-        # Estimación simple de anchura de caracteres
         char_width = font_size * 0.5
+        max_chars = int(max_width / char_width)
         
         for word in words:
             test_line = current_line + (" " if current_line else "") + word
-            if len(test_line) * char_width <= max_width:
+            if len(test_line) <= max_chars:
                 current_line = test_line
             else:
                 if current_line:
@@ -618,48 +544,41 @@ class TopoGuidePDFGenerator:
         return lines
     
     def _pil_to_reportlab(self, img_bytes):
-        """Convierte imagen PIL a formato compatible con ReportLab"""
+        """Convierte imagen a formato ReportLab"""
         from reportlab.lib.utils import ImageReader
         return ImageReader(img_bytes)
     
     def generate(self, page1_data, page2_data, logo_left=None, logo_right=None):
-        """Genera el PDF completo de 2 páginas"""
+        """Genera PDF completo"""
         # Página 1
-        self.c.showPage()
-        self.c.setPageSize(A4)  # Mantener A4 pero procesar en landscape
-        self.LANDSCAPE_WIDTH, self.LANDSCAPE_HEIGHT = A4[1], A4[0]
-        
         self._draw_page1(page1_data, logo_left, logo_right)
+        self.c.showPage()
         
         # Página 2
-        self.c.showPage()
         self._draw_page2(page2_data)
+        self.c.showPage()
         
-        # Guardar PDF
+        # Guardar
         self.c.save()
-        
         return self.output_path
 
 
 def create_topoguide_pdf(output_path, data, logo_left=None, logo_right=None):
     """
-    Función principal para crear una topoguía de senderismo
+    Crea topoguía PDF
     
     Args:
-        output_path: Ruta donde se guardará el PDF
-        data: Diccionario con todos los datos de la ruta
-        logo_left: Ruta al logo institucional izquierdo (opcional)
-        logo_right: Ruta al logo institucional derecho (opcional)
-    
-    Returns:
-        Ruta del PDF generado
+        output_path: Ruta de salida
+        data: Datos de la ruta
+        logo_left: Logo izquierdo (opcional)
+        logo_right: Logo derecho (opcional)
     """
     generator = TopoGuidePDFGenerator(output_path)
     
-    # Datos para página 1
+    # Página 1
     page1_data = {
         'route_code': data.get('route_code', 'PR-GU 00'),
-        'route_name': data.get('route_name', 'Nombre del Sendero'),
+        'route_name': data.get('route_name', 'Sendero'),
         'panoramic_image': data.get('panoramic_image'),
         'landmarks': data.get('landmarks', []),
         'paragraphs': data.get('paragraphs', []),
@@ -667,7 +586,7 @@ def create_topoguide_pdf(output_path, data, logo_left=None, logo_right=None):
         'date': data.get('date', datetime.now().strftime('%Y-%m-%d'))
     }
     
-    # Datos para página 2
+    # Página 2
     page2_data = {
         'map_image': data.get('map_image'),
         'profile_image': data.get('profile_image'),
@@ -679,17 +598,17 @@ def create_topoguide_pdf(output_path, data, logo_left=None, logo_right=None):
             'effort': 2
         }),
         'technical': {
-            'time': data.get('time', '2h 35m'),
+            'time': data.get('time', '2h 30m'),
             'distance': data.get('distance', '11,0 km'),
             'elevation_up': data.get('elevation_up', '167 m'),
             'elevation_down': data.get('elevation_down', '167 m'),
             'route_type': data.get('route_type', 'Circular'),
             'emergency': data.get('emergency', '112'),
             'phone': data.get('phone', '949 88 53 00'),
-            'web': data.get('web', 'http://areasprotegidas.castillalamancha.es')
-        }
+            'web': data.get('web', 'http://example.com')
+        },
+        'date': data.get('date', datetime.now().strftime('%Y-%m-%d'))
     }
     
     generator.generate(page1_data, page2_data, logo_left, logo_right)
-    
     return output_path
